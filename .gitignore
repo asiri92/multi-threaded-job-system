@@ -28,5 +28,8 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Project notes
+PROJECT_2_MULTITHREADED_JOB_SYSTEM.md
+
 # Windows artifacts
 nul
