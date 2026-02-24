@@ -24,3 +24,9 @@ out/
 # OS
 Thumbs.db
 .DS_Store
+
+# Claude Code
+.claude/
+
+# Windows artifacts
+nul
