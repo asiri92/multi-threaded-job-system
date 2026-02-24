@@ -1,0 +1,26 @@
+# Build
+build/
+cmake-build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled
+*.obj
+*.o
+*.exe
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+
+# OS
+Thumbs.db
+.DS_Store
