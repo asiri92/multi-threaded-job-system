@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang-17
+            cxx: clang++-17
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: gcc-13
+            cxx: g++-13
+          - os: windows-latest
+            compiler: msvc
+            cc: cl
+            cxx: cl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Clang 17 (Ubuntu/Clang)
+        if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'clang'
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y clang-17
+
+      - name: Install GCC 13 (Ubuntu/GCC)
+        if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+        run: sudo apt-get install -y gcc-13 g++-13
+
+      - name: Configure (Unix)
+        if: matrix.os == 'ubuntu-latest'
+        run: cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }}
+
+      - name: Configure (Windows/MSVC)
+        if: matrix.os == 'windows-latest'
+        run: cmake -B build -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run Tests
+        run: ctest --test-dir build --build-config Release --output-on-failure
