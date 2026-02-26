@@ -53,8 +53,15 @@ docs/                 — Design documentation
 3. `std::mutex` + `std::condition_variable` for worker wake-up / shutdown signaling
 4. Workers execute jobs **outside** any lock
 
+## Git Workflow (SOP)
+- **Never push directly to `main`** — branch protection rejects merge commits
+- Always work on a feature branch: `git checkout -b <branch> origin/main`
+- Cherry-pick or commit work onto the branch, push, then open a PR via `gh pr create`
+- Branch naming convention: `milestone-N` or `feature/<short-description>`
+
 ## Current Milestone
-**Milestone 1** — Foundational Thread Pool + Basic Scheduler
-- Round-robin fairness across clients
-- Per-client job count metrics
-- Graceful shutdown (drain all queues then stop)
+**Milestone 2** — Weighted Round Robin Scheduler (complete, PR #4)
+- Per-client weight controls consecutive job slots per WRR cycle
+- `rr_remaining_` counter piggybacked on `rr_mutex_` (no new locks)
+- Default weight=1 preserves full Milestone 1 backward compatibility
+- 15 tests passing (8 M1 + 7 M2)
