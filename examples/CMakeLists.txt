@@ -3,3 +3,6 @@ target_link_libraries(basic_demo PRIVATE job_system)
 
 add_executable(weighted_demo weighted_demo.cpp)
 target_link_libraries(weighted_demo PRIVATE job_system)
+
+add_executable(drr_demo drr_demo.cpp)
+target_link_libraries(drr_demo PRIVATE job_system)

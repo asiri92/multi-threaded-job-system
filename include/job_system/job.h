@@ -12,6 +12,7 @@ struct Job {
     std::function<void()> task;
     std::chrono::steady_clock::time_point enqueue_time;
     uint64_t job_id{0};
+    uint32_t cost_hint{1}; // DRR cost unit; default 1 = unit cost (WRR-equivalent)
 
     Job() = default;
 

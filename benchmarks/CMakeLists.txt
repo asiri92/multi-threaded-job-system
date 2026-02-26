@@ -1,0 +1,2 @@
+add_executable(mixed_workload_bench mixed_workload_bench.cpp)
+target_link_libraries(mixed_workload_bench PRIVATE job_system)
