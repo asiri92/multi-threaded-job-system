@@ -12,6 +12,7 @@ namespace job_system {
 
 struct ClientState {
     std::string client_id;
+    const size_t weight;
     std::deque<Job> queue;
     mutable std::mutex mutex;
 
@@ -20,7 +21,8 @@ struct ClientState {
     std::atomic<uint64_t> executed_count{0};
     std::atomic<int64_t> total_execution_time_us{0}; // microseconds
 
-    explicit ClientState(std::string id) : client_id(std::move(id)) {}
+    explicit ClientState(std::string id, size_t w = 1)
+        : client_id(std::move(id)), weight(w) {}
 
     // Non-copyable, non-movable (contains mutex)
     ClientState(const ClientState&) = delete;

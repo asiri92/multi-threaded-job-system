@@ -22,13 +22,14 @@ public:
         uint64_t executed{0};
         double avg_execution_time_us{0.0};
         size_t queue_depth{0};
+        size_t weight{1};
     };
 
     Scheduler();
     ~Scheduler();
 
     // Client management
-    void register_client(const std::string& client_id);
+    void register_client(const std::string& client_id, size_t weight = 1);
 
     // Job submission — called by client threads
     void submit(const std::string& client_id, std::function<void()> task);
@@ -59,6 +60,7 @@ private:
 
     mutable std::mutex rr_mutex_;
     size_t rr_index_{0};
+    size_t rr_remaining_{0};
 
     std::atomic<uint64_t> next_job_id_{1};
     std::atomic<uint64_t> total_processed_{0};

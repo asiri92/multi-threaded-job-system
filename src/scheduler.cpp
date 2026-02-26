@@ -7,12 +7,15 @@ namespace job_system {
 Scheduler::Scheduler() = default;
 Scheduler::~Scheduler() = default;
 
-void Scheduler::register_client(const std::string& client_id) {
+void Scheduler::register_client(const std::string& client_id, size_t weight) {
+    if (weight == 0) {
+        throw std::invalid_argument("Client weight must be >= 1: " + client_id);
+    }
     std::unique_lock lock(registry_mutex_);
     if (clients_.contains(client_id)) {
         throw std::runtime_error("Client already registered: " + client_id);
     }
-    clients_.emplace(client_id, std::make_shared<ClientState>(client_id));
+    clients_.emplace(client_id, std::make_shared<ClientState>(client_id, weight));
     client_order_.push_back(client_id);
 }
 
@@ -45,18 +48,28 @@ std::optional<Job> Scheduler::select_next_job() {
 
     std::lock_guard rr_lock(rr_mutex_);
 
-    for (size_t i = 0; i < n; ++i) {
-        size_t idx = (rr_index_ + i) % n;
-        const auto& cid = client_order_[idx];
-        auto& client = clients_.at(cid);
+    for (size_t scanned = 0; scanned < n; ++scanned) {
+        auto& client = clients_.at(client_order_[rr_index_]);
+
+        // Lazy init / refill quota when we arrive at a new client
+        if (rr_remaining_ == 0) {
+            rr_remaining_ = client->weight;
+        }
 
         std::lock_guard client_lock(client->mutex);
         if (!client->queue.empty()) {
             Job job = std::move(client->queue.front());
             client->queue.pop_front();
-            rr_index_ = (idx + 1) % n;
+            --rr_remaining_;
+            if (rr_remaining_ == 0) {
+                rr_index_ = (rr_index_ + 1) % n; // quota exhausted → rotate
+            }
             return job;
         }
+
+        // Client empty — work-conserving skip
+        rr_remaining_ = 0;
+        rr_index_ = (rr_index_ + 1) % n;
     }
 
     return std::nullopt;
@@ -86,6 +99,7 @@ Scheduler::ClientMetrics Scheduler::get_client_metrics(
         std::lock_guard client_lock(client->mutex);
         metrics.queue_depth = client->queue.size();
     }
+    metrics.weight = client->weight;
     return metrics;
 }
 
