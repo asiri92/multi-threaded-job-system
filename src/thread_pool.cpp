@@ -57,8 +57,13 @@ void ThreadPool::worker_loop(std::stop_token stop_token) {
             // No work available
             if (draining_.load(std::memory_order_acquire) &&
                 !scheduler_.has_pending_jobs()) {
-                // Shutdown draining complete
-                return;
+                // Sleep briefly to allow any BLOCK-strategy submitters that were
+                // just notified to push their queued jobs before we exit.
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                if (!scheduler_.has_pending_jobs()) {
+                    return; // Truly done
+                }
+                continue; // Jobs appeared — keep processing
             }
 
             // Wait for new work or shutdown signal

@@ -21,9 +21,8 @@ std::optional<Job> WeightedRoundRobinPolicy::select_next_job(
         }
 
         std::lock_guard client_lock(client->mutex);
-        if (!client->queue.empty()) {
-            Job job = std::move(client->queue.front());
-            client->queue.pop_front();
+        if (client->any_queued()) {
+            Job job = client->dequeue_highest();
             --rr_remaining_;
             if (rr_remaining_ == 0) {
                 rr_index_ = (rr_index_ + 1) % n; // quota exhausted → rotate
@@ -38,6 +37,12 @@ std::optional<Job> WeightedRoundRobinPolicy::select_next_job(
     }
 
     return std::nullopt;
+}
+
+void WeightedRoundRobinPolicy::on_client_unregistered(
+    const std::string& /*client_id*/) {
+    rr_index_ = 0;
+    rr_remaining_ = 0;
 }
 
 } // namespace job_system

@@ -31,6 +31,11 @@ public:
     // Default no-op — override for time-aware policies
     virtual void on_job_executed(const std::string& /*client_id*/,
                                  std::chrono::microseconds /*duration*/) {}
+
+    virtual void on_client_weight_updated(const std::string& /*client_id*/,
+                                           size_t /*new_weight*/) {}
+
+    virtual void on_client_unregistered(const std::string& /*client_id*/) {}
 };
 
 } // namespace job_system

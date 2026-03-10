@@ -1,10 +1,12 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 
 #include "job_system/job.h"
@@ -20,8 +22,12 @@ enum class OverflowStrategy {
 
 struct ClientState {
     std::string client_id;
-    const size_t weight;
-    std::deque<Job> queue;
+    size_t weight;
+
+    static constexpr size_t NUM_PRIORITY_LEVELS =
+        static_cast<size_t>(Priority::NUM_LEVELS);
+    std::array<std::deque<Job>, NUM_PRIORITY_LEVELS> queues;
+
     mutable std::mutex mutex;
     std::condition_variable submit_cv_; // for BLOCK strategy
 
@@ -48,6 +54,33 @@ struct ClientState {
     ClientState& operator=(const ClientState&) = delete;
     ClientState(ClientState&&) = delete;
     ClientState& operator=(ClientState&&) = delete;
+
+    // Caller must hold mutex
+    bool any_queued() const {
+        for (const auto& q : queues)
+            if (!q.empty()) return true;
+        return false;
+    }
+
+    // Returns total jobs across all priority levels. Caller must hold mutex.
+    size_t total_queued() const {
+        size_t count = 0;
+        for (const auto& q : queues)
+            count += q.size();
+        return count;
+    }
+
+    // Dequeues highest-priority pending job. Caller must hold mutex.
+    Job dequeue_highest() {
+        for (int level = static_cast<int>(NUM_PRIORITY_LEVELS) - 1; level >= 0; --level) {
+            if (!queues[level].empty()) {
+                Job j = std::move(queues[level].front());
+                queues[level].pop_front();
+                return j;
+            }
+        }
+        throw std::logic_error("dequeue_highest called on empty client");
+    }
 };
 
 } // namespace job_system

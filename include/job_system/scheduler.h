@@ -55,11 +55,28 @@ public:
 
     // Job submission — called by client threads
     void submit(const std::string& client_id, std::function<void()> task,
-                uint32_t cost_hint = 1);
+                uint32_t cost_hint = 1,
+                Priority priority = Priority::NORMAL);
 
     // Job selection — called by worker threads
     // Returns nullopt if no jobs available (caller should wait on CV)
     std::optional<Job> select_next_job();
+
+    // Cancellation
+    // Returns true if the job was found and removed while still pending.
+    bool cancel_job(uint64_t job_id);
+
+    // Removes all pending jobs for the client. Returns the count drained.
+    // Throws std::runtime_error if client unknown.
+    uint64_t drain_client(const std::string& client_id);
+
+    // Dynamic reconfiguration
+    void update_client_weight(const std::string& client_id, size_t new_weight);
+
+    // Drains pending jobs, removes client, notifies policy.
+    // Returns the number of jobs that were still pending.
+    // Throws std::runtime_error if client_id unknown.
+    uint64_t unregister_client(const std::string& client_id);
 
     // Metrics
     ClientMetrics  get_client_metrics(const std::string& client_id) const;
