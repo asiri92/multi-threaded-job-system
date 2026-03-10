@@ -15,7 +15,11 @@ target_link_libraries(test_milestone2 PRIVATE job_system GTest::gtest_main)
 add_executable(test_milestone3 test_milestone3.cpp)
 target_link_libraries(test_milestone3 PRIVATE job_system GTest::gtest_main)
 
+add_executable(test_milestone4 test_milestone4.cpp)
+target_link_libraries(test_milestone4 PRIVATE job_system GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(test_milestone1)
 gtest_discover_tests(test_milestone2)
 gtest_discover_tests(test_milestone3)
+gtest_discover_tests(test_milestone4)

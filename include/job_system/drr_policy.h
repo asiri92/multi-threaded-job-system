@@ -23,6 +23,11 @@ public:
         const std::vector<std::string>& client_order,
         const ClientMap& clients) override;
 
+    void on_client_weight_updated(const std::string& client_id,
+                                   size_t new_weight) override;
+
+    void on_client_unregistered(const std::string& client_id) override;
+
 private:
     uint32_t base_quantum_;
     size_t   drr_index_{0};

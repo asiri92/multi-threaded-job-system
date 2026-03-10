@@ -20,6 +20,8 @@ public:
         const std::vector<std::string>& client_order,
         const ClientMap& clients) override;
 
+    void on_client_unregistered(const std::string& client_id) override;
+
 private:
     size_t rr_index_{0};
     size_t rr_remaining_{0};
