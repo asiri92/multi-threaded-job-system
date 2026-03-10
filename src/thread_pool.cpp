@@ -18,8 +18,19 @@ ThreadPool::~ThreadPool() {
     }
 }
 
-void ThreadPool::shutdown() {
-    // Signal draining phase: workers will keep running until queues are empty
+void ThreadPool::shutdown(ShutdownMode mode) {
+    if (mode == ShutdownMode::IMMEDIATE) {
+        // Drain all pending jobs atomically, then stop workers immediately
+        scheduler_.drain_all_clients();
+        running_.store(false, std::memory_order_release);
+        draining_.store(true, std::memory_order_release);
+        cv_.notify_all();
+        for (auto& w : workers_) w.request_stop();
+        workers_.clear();
+        return;
+    }
+
+    // GRACEFUL — existing logic: drain queues then stop
     draining_.store(true, std::memory_order_release);
     cv_.notify_all();
 
@@ -76,6 +87,9 @@ void ThreadPool::worker_loop(std::stop_token stop_token) {
         }
 
         // Execute the job outside any scheduler/client lock
+        const std::string cid = job->client_id;
+        const uint64_t jid = job->job_id;
+
         auto start = std::chrono::steady_clock::now();
         if (job->task) {
             job->task();
@@ -84,7 +98,7 @@ void ThreadPool::worker_loop(std::stop_token stop_token) {
         auto duration =
             std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-        scheduler_.record_execution(job->client_id, duration);
+        scheduler_.record_execution(cid, jid, duration);
     }
 }
 

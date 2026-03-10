@@ -11,13 +11,16 @@
 
 namespace job_system {
 
+enum class ShutdownMode { GRACEFUL, IMMEDIATE };
+
 class ThreadPool {
 public:
     explicit ThreadPool(Scheduler& scheduler, size_t worker_count);
     ~ThreadPool();
 
-    // Graceful shutdown: drain all queues, then stop workers
-    void shutdown();
+    // Graceful shutdown: drain all queues, then stop workers.
+    // IMMEDIATE shutdown: drain queues atomically then kill workers.
+    void shutdown(ShutdownMode mode = ShutdownMode::GRACEFUL);
 
     bool is_running() const;
     size_t worker_count() const;

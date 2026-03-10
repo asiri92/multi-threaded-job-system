@@ -36,6 +36,7 @@ struct ClientState {
     std::atomic<uint64_t> executed_count{0};
     std::atomic<int64_t>  total_execution_time_us{0}; // microseconds
     std::atomic<uint64_t> overflow_count{0};
+    std::atomic<uint64_t> expired_count{0};
 
     // Backpressure config — set at registration time, const thereafter
     size_t max_queue_depth{0};                         // 0 = unlimited
