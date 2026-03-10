@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -13,6 +15,7 @@
 
 #include "job_system/client_state.h"
 #include "job_system/job.h"
+#include "job_system/metrics_observer.h"
 #include "job_system/scheduling_policy.h"
 
 namespace job_system {
@@ -31,6 +34,7 @@ public:
         size_t   queue_depth{0};
         size_t   weight{1};
         uint64_t overflow_count{0};
+        uint64_t expired_count{0};
     };
 
     struct GlobalMetrics {
@@ -56,7 +60,8 @@ public:
     // Job submission — called by client threads
     void submit(const std::string& client_id, std::function<void()> task,
                 uint32_t cost_hint = 1,
-                Priority priority = Priority::NORMAL);
+                Priority priority = Priority::NORMAL,
+                std::chrono::steady_clock::time_point deadline = {});
 
     // Job selection — called by worker threads
     // Returns nullopt if no jobs available (caller should wait on CV)
@@ -83,8 +88,15 @@ public:
     GlobalMetrics  get_global_metrics() const;
     uint64_t       total_jobs_processed() const; // backward compat
 
+    // Drains all pending jobs across all clients (used by IMMEDIATE shutdown)
+    void drain_all_clients();
+
+    // Thread-safe: can be called at any time
+    void set_observer(std::shared_ptr<IMetricsObserver> observer);
+
     // Record that a job finished executing (called by workers)
     void record_execution(const std::string& client_id,
+                          uint64_t job_id,
                           std::chrono::microseconds duration);
 
     // State
@@ -104,6 +116,7 @@ private:
 
     std::atomic<uint64_t> next_job_id_{1};
     std::atomic<uint64_t> total_processed_{0};
+    std::atomic<std::shared_ptr<IMetricsObserver>> observer_{nullptr};
 };
 
 } // namespace job_system

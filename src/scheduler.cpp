@@ -37,7 +37,8 @@ void Scheduler::register_client(const std::string& client_id,
 void Scheduler::submit(const std::string& client_id,
                         std::function<void()> task,
                         uint32_t cost_hint,
-                        Priority priority) {
+                        Priority priority,
+                        std::chrono::steady_clock::time_point deadline) {
     std::shared_ptr<ClientState> client;
     {
         std::shared_lock lock(registry_mutex_);
@@ -52,7 +53,9 @@ void Scheduler::submit(const std::string& client_id,
     job.job_id = next_job_id_.fetch_add(1, std::memory_order_relaxed);
     job.cost_hint = cost_hint;
     job.priority = priority;
+    job.deadline = deadline;
 
+    const uint64_t job_id_snapshot = job.job_id;
     const size_t prio_idx = static_cast<size_t>(priority);
 
     {
@@ -97,13 +100,37 @@ void Scheduler::submit(const std::string& client_id,
         client->queues[prio_idx].push_back(std::move(job));
     }
     client->submitted_count.fetch_add(1, std::memory_order_relaxed);
+
+    if (auto obs = observer_.load(std::memory_order_acquire)) {
+        obs->on_job_submitted(client_id, job_id_snapshot);
+    }
 }
 
 std::optional<Job> Scheduler::select_next_job() {
     std::shared_lock registry_lock(registry_mutex_);
     if (client_order_.empty()) return std::nullopt;
-    std::lock_guard rr_lock(rr_mutex_);
-    return policy_->select_next_job(client_order_, clients_);
+
+    while (true) {
+        std::optional<Job> maybe_job;
+        {
+            std::lock_guard rr_lock(rr_mutex_);
+            maybe_job = policy_->select_next_job(client_order_, clients_);
+        }
+        if (!maybe_job.has_value()) return std::nullopt;
+
+        Job job = std::move(*maybe_job);
+        if (job.is_expired()) {
+            auto it = clients_.find(job.client_id);
+            if (it != clients_.end()) {
+                it->second->expired_count.fetch_add(1, std::memory_order_relaxed);
+            }
+            if (auto obs = observer_.load(std::memory_order_acquire)) {
+                obs->on_job_expired(job.client_id, job.job_id);
+            }
+            continue;
+        }
+        return job;
+    }
 }
 
 bool Scheduler::cancel_job(uint64_t job_id) {
@@ -114,8 +141,12 @@ bool Scheduler::cancel_job(uint64_t job_id) {
         for (auto& q : client->queues) {
             for (auto it = q.begin(); it != q.end(); ++it) {
                 if (it->job_id == job_id) {
+                    const uint64_t jid = it->job_id;
                     q.erase(it);
                     client->submit_cv_.notify_one();
+                    if (auto obs = observer_.load(std::memory_order_acquire)) {
+                        obs->on_job_cancelled(cid, jid);
+                    }
                     return true;
                 }
             }
@@ -143,6 +174,21 @@ uint64_t Scheduler::drain_client(const std::string& client_id) {
     }
     client->submit_cv_.notify_all();
     return count;
+}
+
+void Scheduler::drain_all_clients() {
+    std::vector<std::string> ids;
+    {
+        std::shared_lock lock(registry_mutex_);
+        ids = client_order_;
+    }
+    for (const auto& id : ids) {
+        try { drain_client(id); } catch (const std::runtime_error&) {}
+    }
+}
+
+void Scheduler::set_observer(std::shared_ptr<IMetricsObserver> observer) {
+    observer_.store(std::move(observer), std::memory_order_release);
 }
 
 void Scheduler::update_client_weight(const std::string& client_id,
@@ -223,6 +269,8 @@ Scheduler::ClientMetrics Scheduler::get_client_metrics(
     metrics.weight         = client->weight;
     metrics.overflow_count =
         client->overflow_count.load(std::memory_order_relaxed);
+    metrics.expired_count =
+        client->expired_count.load(std::memory_order_relaxed);
     return metrics;
 }
 
@@ -262,6 +310,7 @@ uint64_t Scheduler::total_jobs_processed() const {
 }
 
 void Scheduler::record_execution(const std::string& client_id,
+                                  uint64_t job_id,
                                   std::chrono::microseconds duration) {
     std::shared_lock lock(registry_mutex_);
     auto it = clients_.find(client_id);
@@ -271,6 +320,10 @@ void Scheduler::record_execution(const std::string& client_id,
     it->second->total_execution_time_us.fetch_add(duration.count(),
                                                    std::memory_order_relaxed);
     total_processed_.fetch_add(1, std::memory_order_relaxed);
+
+    if (auto obs = observer_.load(std::memory_order_acquire)) {
+        obs->on_job_executed(client_id, job_id, duration);
+    }
 }
 
 bool Scheduler::has_pending_jobs() const {

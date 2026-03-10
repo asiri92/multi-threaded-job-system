@@ -22,6 +22,13 @@ struct Job {
     uint64_t job_id{0};
     uint32_t cost_hint{1}; // DRR cost unit; default 1 = unit cost (WRR-equivalent)
     Priority priority{Priority::NORMAL};
+    // Default-constructed time_point = epoch = "no deadline" sentinel
+    std::chrono::steady_clock::time_point deadline{};
+
+    bool is_expired() const {
+        if (deadline == std::chrono::steady_clock::time_point{}) return false;
+        return std::chrono::steady_clock::now() > deadline;
+    }
 
     Job() = default;
 
